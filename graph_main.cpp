@@ -36,33 +36,12 @@ bool is_adjacent_to(AdjacencyListGraph& G, int v, vector<int> S)
 }
 
 
-// find a maximal clique by choosing vertices at random
-vector<int> find_maximal_clique(AdjacencyListGraph& G, std::mt19937_64& mt)
-{
-  int v = mt() % G.number_of_vertices();
-  
-  cout << v << endl;
-  vector<int> C = {v};
-  vector<int> S0 = G.Vertices[v].neighbors;
-
-  while (!S0.empty())
-  {
-    int i = mt() % S0.size();
-    int u = S0[i];
-    C.push_back(u);
-
-    S0 = Intersection(G.Vertices[u].neighbors, S0);
-  }
-
-  sort(C.begin(), C.end());
-  return C;
-}
-
-// dominated[v] = num of vertices in C that adjacacent to v
-vector<int> dominated;
-vector<int> solution;
-
-void add_vertex(AdjacencyListGraph& G, vector<int>& C, int v)
+// add vertex v into the clique C
+void add_vertex(AdjacencyListGraph& G,
+                vector<int>& C,        // Clique
+                vector<int>& solution, // solution[v] == 1 if v is in C
+                vector<int>& dominated, // num of vertices adjacent to some vertex in C
+                int v)
 {
   if (solution[v])
   {
@@ -70,6 +49,7 @@ void add_vertex(AdjacencyListGraph& G, vector<int>& C, int v)
     exit(1);
   }
 
+  C.push_back(v);
   solution[v] = 1;
   for (int u : G.Vertices[v].neighbors)
   {
@@ -77,76 +57,39 @@ void add_vertex(AdjacencyListGraph& G, vector<int>& C, int v)
   }
 }
 
-// find a maximal clique by choosing vertices at random
-vector<int> simple_local_search(AdjacencyListGraph& G, std::mt19937_64& mt)
+
+// ランダムに1頂点ずつ追加して極大クリークを作る単純な例
+vector<int> find_maximal_clique(AdjacencyListGraph& G, std::mt19937_64& mt)
 {
-  for (int i = 0; i < G.number_of_vertices(); i++) dominated.push_back(0);
-  for (int i = 0; i < G.number_of_vertices(); i++) solution.push_back(0);
-  
-  // clique
-  vector<int> C;
+  vector<int> C;                // clique
+  vector<int> solution(G.number_of_vertices(), 0);
+  vector<int> dominated(G.number_of_vertices(), 0);
 
+  // ランダムに1頂点選択してCに追加
+  int v = mt() % G.number_of_vertices();
 
-  
-
-  vector<int> S0, S1;
-
-  // for two vertices in G
-  int u = mt() % G.number_of_vertices();
-  S0 = G.Vertices[u].neighbors;
-  int v = S0[mt() % S0.size()];
-
-
-  S0.clear();
-
-  vector<int>::iterator iu, iv;
-  iu = G.Vertices[u].neighbors.begin();
-  iv = G.Vertices[v].neighbors.begin();
-  while (iu != G.Vertices[u].neighbors.end() && 
-         iv != G.Vertices[v].neighbors.end())
-  {
-    if (*iu == v) iu++;
-    else if (*iv == u) iv++;
-    else if (iu == G.Vertices[u].neighbors.end())
-    {
-      S1.push_back(*iv);
-      iv++;
-    }
-    else if (iv == G.Vertices[v].neighbors.end())
-    {
-      S1.push_back(*iu);
-      iu++;
-    }
-    else if (*iu == *iv)
-    {
-      S0.push_back(*iu);
-      iu++;
-      iv++;
-    }
-    else if (*iu < *iv)
-    {
-      S1.push_back(*iu);
-      iu++;
-    }
-    else if (*iv < *iu)
-    {
-      S1.push_back(*iv);
-      iv++;
-    }
-  }
+  add_vertex(G, C, solution, dominated, v);
+  vector<int> S0 = G.Vertices[v].neighbors;
 
   while (!S0.empty())
   {
-    v = S0[mt() % S0.size()];
-    C.push_back(v);
-    S0 = Intersection(G.Vertices[v].neighbors, S0);
-    S1 = Intersection(G.Vertices[v].neighbors, S1);
+    int i = mt() % S0.size();
+    v = S0[i];
+
+    add_vertex(G, C, solution, dominated, v);
+
+    vector<int> Stmp = S0;
+    S0.clear();
+    for (int u : Stmp)
+    {
+      if (dominated[u] == (int)C.size()) S0.push_back(u);
+    }
+    // S0の頂点はCの頂点すべてと隣接しているはず
   }
 
   sort(C.begin(), C.end());
   return C;
 }
-
 
 
 
@@ -155,30 +98,34 @@ int main()
 {
   std::random_device rnd;    // 非決定的な乱数生成器
   std::mt19937_64 mt(rnd()); // メルセンヌ・ツイスタ
-  
 
-
-  
+  // インスタンス
   string filename = "instances/c-fat200-1.clq";
-  vector<string> lines;
 
+  // ファイル読む
   AdjacencyListGraph G(filename, "dimacs");
 
-  //vector<int> clq = find_maximal_clique(G, mt);
-  vector<int> clq = simple_local_search(G, mt);
 
+  // 使い方の例
+  // 頂点数と辺の数
+  printf("This graph has %d vertices and %d edges.\n", G.number_of_vertices(), G.number_of_edges());
+  // 頂点の次数を表示
+  for (int v = 0; v < 10; v++) printf("deg(%d) = %3d\n", v, G.degree(v));
+
+  // 頂点vと隣接する頂点をすべて表示
+  int v = 0;
+  printf("The neighborhood of vertex %d:", v);
+  for (int u : G.Vertices[v].neighbors)
+  {
+    printf("%d ", u);
+  }
+  printf("\n");
+
+  // 極大クリークを1個作る
+  vector<int> clq = find_maximal_clique(G, mt);
   cout << clq.size() << endl;
   for (int v : clq) cout << v << " ";
   cout << endl;
-  // int v = 0;
-  // for (auto u : G.Vertices[v].neighbors)
-  // {
-  //   cout << u << " ";
-  // }
-  // cout << endl;
-
-  // vector<int> S1 = {1, 36, 37, 38, 73, 148};
-  // vector<int> S2 = {1, 36, 37, 38, 73, 100};
 
 
   return 0;
